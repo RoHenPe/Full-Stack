@@ -1,6 +1,7 @@
-import { eq, desc, ilike, sql } from "drizzle-orm"
+import { eq, desc, ilike, and } from "drizzle-orm"
 import { db } from "../../db"
-import { blogs, users } from "../../db/schema"
+import { blogs, users, readingList } from "../../db/schema"
+import { getCurrentUser } from "./session"
 
 export type Blog = {
   id: number
@@ -11,7 +12,14 @@ export type Blog = {
   userId?: number | null
 }
 
-// Fallback in-memory data if database is not configured
+export type ReadingListItem = {
+  id: number
+  userId: number
+  blogId: number
+  read: boolean
+  blog: Blog
+}
+
 let fallbackBlogs: Blog[] = [
   {
     id: 1,
@@ -39,6 +47,8 @@ let fallbackBlogs: Blog[] = [
   },
 ]
 let nextFallbackId = 4
+let fallbackReadingList: { id: number; userId: number; blogId: number; read: boolean }[] = []
+let nextReadingListId = 1
 
 export const getBlogs = async (filter?: string): Promise<Blog[]> => {
   if (process.env.DATABASE_URL) {
@@ -80,22 +90,31 @@ export const getBlogById = async (id: number): Promise<Blog | undefined> => {
   return fallbackBlogs.find((b) => b.id === id)
 }
 
-export const addBlog = async (title: string, author: string, url: string) => {
+export const addBlog = async (
+  title: string,
+  author: string,
+  url: string,
+  userId?: number
+) => {
   if (process.env.DATABASE_URL) {
     try {
-      let user = await db.query.users.findFirst({
-        orderBy: sql`RANDOM()`,
-      })
+      let creatorId = userId
+      if (!creatorId) {
+        const currentUser = await getCurrentUser()
+        creatorId = currentUser?.id
+      }
 
-      if (!user) {
-        const [createdUser] = await db
-          .insert(users)
-          .values({
-            username: "mluukkai",
-            name: "Matti Luukkainen",
-          })
-          .returning()
-        user = createdUser
+      if (!creatorId) {
+        const firstUser = await db.query.users.findFirst()
+        if (firstUser) {
+          creatorId = firstUser.id
+        } else {
+          const [newUser] = await db
+            .insert(users)
+            .values({ username: "defaultuser", name: "Default User" })
+            .returning()
+          creatorId = newUser.id
+        }
       }
 
       const [newBlog] = await db
@@ -105,9 +124,18 @@ export const addBlog = async (title: string, author: string, url: string) => {
           author,
           url,
           likes: 0,
-          userId: user?.id,
+          userId: creatorId,
         })
         .returning()
+
+      // Automatically add to creator's reading list
+      if (creatorId && newBlog) {
+        await db.insert(readingList).values({
+          userId: creatorId,
+          blogId: newBlog.id,
+          read: false,
+        })
+      }
 
       return newBlog
     } catch (error) {
@@ -121,9 +149,15 @@ export const addBlog = async (title: string, author: string, url: string) => {
     author,
     url,
     likes: 0,
-    userId: 1,
+    userId: userId || 1,
   }
   fallbackBlogs.push(newBlog)
+  fallbackReadingList.push({
+    id: nextReadingListId++,
+    userId: userId || 1,
+    blogId: newBlog.id,
+    read: false,
+  })
   return newBlog
 }
 
@@ -147,4 +181,89 @@ export const likeBlog = async (id: number) => {
   if (blog) {
     blog.likes += 1
   }
+}
+
+export const addToReadingList = async (userId: number, blogId: number) => {
+  if (process.env.DATABASE_URL) {
+    try {
+      const existing = await db.query.readingList.findFirst({
+        where: and(
+          eq(readingList.userId, userId),
+          eq(readingList.blogId, blogId)
+        ),
+      })
+      if (!existing) {
+        await db.insert(readingList).values({
+          userId,
+          blogId,
+          read: false,
+        })
+      }
+      return
+    } catch (error) {
+      console.error("Error adding to reading list:", error)
+    }
+  }
+
+  const exists = fallbackReadingList.find(
+    (item) => item.userId === userId && item.blogId === blogId
+  )
+  if (!exists) {
+    fallbackReadingList.push({
+      id: nextReadingListId++,
+      userId,
+      blogId,
+      read: false,
+    })
+  }
+}
+
+export const markAsRead = async (userId: number, blogId: number) => {
+  if (process.env.DATABASE_URL) {
+    try {
+      await db
+        .update(readingList)
+        .set({ read: true })
+        .where(
+          and(eq(readingList.userId, userId), eq(readingList.blogId, blogId))
+        )
+      return
+    } catch (error) {
+      console.error("Error marking blog as read:", error)
+    }
+  }
+
+  const item = fallbackReadingList.find(
+    (i) => i.userId === userId && i.blogId === blogId
+  )
+  if (item) {
+    item.read = true
+  }
+}
+
+export const getUserReadingList = async (userId: number): Promise<ReadingListItem[]> => {
+  if (process.env.DATABASE_URL) {
+    try {
+      const items = await db.query.readingList.findMany({
+        where: eq(readingList.userId, userId),
+        with: { blog: true },
+      })
+      return items as ReadingListItem[]
+    } catch (error) {
+      console.error("Error fetching reading list:", error)
+    }
+  }
+
+  const items = fallbackReadingList.filter((item) => item.userId === userId)
+  return items.map((item) => ({
+    ...item,
+    blog: fallbackBlogs.find((b) => b.id === item.blogId) || {
+      id: item.blogId,
+      title: "Unknown Blog",
+      author: "Unknown",
+      url: "#",
+      likes: 0,
+      userId: item.userId,
+    },
+  }))
 }
