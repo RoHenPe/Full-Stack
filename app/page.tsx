@@ -19,8 +19,12 @@ const Home = () => {
         Visit the{" "}
         <Link href="/blogs" className="text-blue-600 hover:underline">
           blogs list
-        </Link>{" "}
-        or{" "}
+        </Link>
+        ,{" "}
+        <Link href="/users" className="text-blue-600 hover:underline">
+          users list
+        </Link>
+        , or{" "}
         <Link href="/blogs/new" className="text-blue-600 hover:underline">
           create a new blog
         </Link>

@@ -7,17 +7,7 @@ const BlogsPage = async ({
   searchParams: Promise<{ filter?: string }>
 }) => {
   const { filter } = await searchParams
-  const allBlogs = getBlogs()
-
-  // Rendered in descending order by number of likes
-  const sortedBlogs = [...allBlogs].sort((a, b) => b.likes - a.likes)
-
-  // Filter blogs by title using search parameter
-  const blogs = filter
-    ? sortedBlogs.filter((blog) =>
-        blog.title.toLowerCase().includes(filter.toLowerCase())
-      )
-    : sortedBlogs
+  const blogs = await getBlogs(filter)
 
   return (
     <div>

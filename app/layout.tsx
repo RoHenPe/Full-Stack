@@ -28,6 +28,10 @@ export default function RootLayout({
             <Link href="/blogs/new" className="font-semibold text-blue-600 hover:underline">
               create new
             </Link>
+            <span>|</span>
+            <Link href="/users" className="font-semibold text-blue-600 hover:underline">
+              users
+            </Link>
           </nav>
         </header>
         <main>{children}</main>

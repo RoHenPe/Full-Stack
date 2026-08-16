@@ -9,3 +9,9 @@ Repository for Full Stack Open Next.js course: https://courses.mooc.fi/org/uh-cs
 - **Exercise 4: Like button** - Server Action on individual blog page to increment likes with cache revalidation.
 - **Exercise 5: Rendered in order** - Blogs list sorted in descending order by likes.
 - **Exercise 6: Search** - Search feature filtering blogs by title using URL search parameters and Server Component.
+
+## Chapter 3 Exercises:
+- **Exercise 7: Deploy to Vercel** - Production deployment to Vercel.
+- **Exercise 8: DrizzleORM and a database** - PostgreSQL schema with Drizzle ORM, migrations, and database services.
+- **Exercise 9: Users** - Users table with relations to blogs, `/users` listing page, and navigation bar link.
+- **Exercise 10: User page** - Individual user page at `/users/[username]` with Drizzle relation join (`with: { blogs: true }`).
